@@ -1,0 +1,110 @@
+# Example Production Inventory
+# Copy this file to terraform.tfvars and customize
+
+cluster_name       = "production-cluster"
+environment        = "production"
+kubernetes_version = "1.28.5"
+
+# BMC/IPMI Credentials
+bmc_credentials = {
+  password = "changeme"  # Use environment variable: TF_VAR_bmc_credentials
+  username = "ADMIN"
+}
+
+# Network Configuration
+network_config = {
+  dns_servers  = ["192.168.1.1", "8.8.8.8"]
+  gateway      = "192.168.1.1"
+  mtu          = 9000
+  pod_cidr     = "10.244.0.0/16"
+  service_cidr = "10.96.0.0/12"
+  subnet_cidr  = "192.168.1.0/24"
+  vlan_id      = 100
+}
+
+# Physical Server Inventory
+servers = {
+  "k8s-master-01" = {
+    cpu_cores     = 16
+    ip_address    = "192.168.1.10"
+    mac_address   = "00:11:22:33:44:55"
+    memory_gb     = 64
+    rack_location = "Rack-A-U10"
+    role          = "control-plane"
+    storage_disks = ["/dev/sda", "/dev/sdb"]
+  },
+  
+  "k8s-master-02" = {
+    cpu_cores     = 16
+    ip_address    = "192.168.1.11"
+    mac_address   = "00:11:22:33:44:56"
+    memory_gb     = 64
+    rack_location = "Rack-A-U11"
+    role          = "control-plane"
+    storage_disks = ["/dev/sda", "/dev/sdb"]
+  },
+  
+  "k8s-master-03" = {
+    cpu_cores     = 16
+    ip_address    = "192.168.1.12"
+    mac_address   = "00:11:22:33:44:57"
+    memory_gb     = 64
+    rack_location = "Rack-A-U12"
+    role          = "control-plane"
+    storage_disks = ["/dev/sda", "/dev/sdb"]
+  },
+  
+  "k8s-worker-01" = {
+    cpu_cores     = 32
+    ip_address    = "192.168.1.20"
+    mac_address   = "00:11:22:33:44:60"
+    memory_gb     = 128
+    rack_location = "Rack-B-U10"
+    role          = "worker"
+    storage_disks = ["/dev/sda", "/dev/sdb", "/dev/sdc", "/dev/sdd"]
+  },
+  
+  "k8s-worker-02" = {
+    cpu_cores     = 32
+    gpu_model     = "NVIDIA-A100"
+    gpu_present   = true
+    ip_address    = "192.168.1.21"
+    mac_address   = "00:11:22:33:44:61"
+    memory_gb     = 128
+    rack_location = "Rack-B-U11"
+    role          = "worker"
+    storage_disks = ["/dev/sda", "/dev/sdb", "/dev/sdc", "/dev/sdd"]
+  }
+}
+
+# Control Plane VIP
+control_plane_vip = "192.168.1.5"
+
+# MetalLB Address Pool
+metallb_address_pool = [
+  "192.168.1.200-192.168.1.250"
+]
+
+# SSH Public Keys
+ssh_public_keys = [
+  "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQ... admin@provisioner"
+]
+
+# Storage Configuration
+storage_config = {
+  ceph_enabled     = true
+  longhorn_enabled = false
+  osd_devices      = ["/dev/sdb", "/dev/sdc", "/dev/sdd"]
+  pool_replication = 3
+}
+
+# Monitoring
+monitoring_enabled = true
+
+# Tags
+tags = {
+  CostCenter  = "Infrastructure"
+  ManagedBy   = "Terraform"
+  Owner       = "Platform Team"
+  Project     = "BareMetal-K8s"
+}
