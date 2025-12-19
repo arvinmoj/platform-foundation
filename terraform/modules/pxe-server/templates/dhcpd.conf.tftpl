@@ -1,0 +1,28 @@
+# DHCP Configuration for PXE Boot
+# Subnet: ${subnet_cidr}
+
+ddns-update-style none;
+default-lease-time 600;
+max-lease-time 7200;
+authoritative;
+
+# Subnet declaration
+subnet ${cidrhost(subnet_cidr, 0)} netmask ${cidrnetmask(subnet_cidr)} {
+  range ${cidrhost(subnet_cidr, 150)} ${cidrhost(subnet_cidr, 200)};
+  option routers ${gateway};
+  option domain-name-servers ${gateway}, 8.8.8.8;
+  option broadcast-address ${cidrhost(subnet_cidr, -1)};
+  
+  # PXE boot configuration
+  next-server ${pxe_server_ip};
+  filename "ipxe.efi";
+  
+  # Static host declarations
+%{ for name, server in servers ~}
+  host ${name} {
+    hardware ethernet ${server.mac_address};
+    fixed-address ${server.ip_address};
+    option host-name "${name}";
+  }
+%{ endfor ~}
+}

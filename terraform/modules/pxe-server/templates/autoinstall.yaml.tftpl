@@ -1,0 +1,71 @@
+#cloud-config
+# Ubuntu Autoinstall Configuration for ${hostname}
+
+autoinstall:
+  version: 1
+  
+  # Locale and keyboard
+  locale: en_US.UTF-8
+  keyboard:
+    layout: us
+  
+  # Network configuration
+  network:
+    version: 2
+    ethernets:
+      ens0:
+        addresses:
+          - ${ip_address}/24
+        gateway4: ${gateway}
+        nameservers:
+          addresses: [%{ for dns in dns_servers ~}${dns}%{ if dns != dns_servers[length(dns_servers)-1] }, %{ endif }%{ endfor ~}]
+        dhcp4: false
+  
+  # Storage configuration
+  storage:
+    layout:
+      name: ${disk_layout}
+      match:
+        size: largest
+  
+  # Identity
+  identity:
+    hostname: ${hostname}
+    username: ubuntu
+    password: $6$rounds=4096$saltsaltsal$L3Rbnh5JrwXULnO8KBfbR2O5fZnb.QyQQxXR4oFqPHQ7
+    # Default password: ubuntu (CHANGE THIS IN PRODUCTION!)
+  
+  # SSH configuration
+  ssh:
+    install-server: true
+    allow-pw: false
+    authorized-keys:
+%{ for key in ssh_keys ~}
+      - ${key}
+%{ endfor ~}
+  
+  # Packages to install
+  packages:
+%{ for pkg in packages ~}
+    - ${pkg}
+%{ endfor ~}
+  
+  # Late commands (run after installation)
+  late-commands:
+    - echo '${hostname}' > /target/etc/hostname
+    - curtin in-target --target=/target -- systemctl enable docker
+    - curtin in-target --target=/target -- systemctl start docker
+    - curtin in-target --target=/target -- swapoff -a
+    - curtin in-target --target=/target -- sed -i '/ swap / s/^/#/' /etc/fstab
+    
+  # User data
+  user-data:
+    disable_root: true
+    timezone: UTC
+    package_update: true
+    package_upgrade: true
+    
+  # Power off after installation
+  power-state:
+    mode: reboot
+    timeout: 300

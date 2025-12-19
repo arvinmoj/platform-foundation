@@ -1,0 +1,23 @@
+#!ipxe
+# Main Boot Menu
+
+:start
+menu Bare-Metal Kubernetes Platform
+%{ for name, entry in entries ~}
+item ${name} Boot ${name} (${entry.role})
+%{ endfor ~}
+item shell Drop to iPXE shell
+item exit Exit to BIOS
+
+choose target && goto $${target}
+
+%{ for name, entry in entries ~}
+:${name}
+chain http://${pxe_server_ip}/boot-${entry.mac_address}.ipxe
+%{ endfor ~}
+
+:shell
+shell
+
+:exit
+exit

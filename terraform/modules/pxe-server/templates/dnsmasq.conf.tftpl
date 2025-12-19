@@ -1,0 +1,29 @@
+# dnsmasq Configuration for PXE Boot
+
+# Interface to listen on
+interface=eth0
+
+# DHCP range
+dhcp-range=${cidrhost(subnet_cidr, 150)},${cidrhost(subnet_cidr, 200)},12h
+
+# Gateway
+dhcp-option=3,${gateway}
+
+# DNS servers
+dhcp-option=6,${gateway},8.8.8.8
+
+# PXE boot options
+dhcp-boot=ipxe.efi,${pxe_server_ip}
+
+# Enable TFTP
+enable-tftp
+tftp-root=${tftp_directory}
+
+# Static DHCP assignments
+%{ for name, server in servers ~}
+dhcp-host=${server.mac_address},${server.ip_address},${name}
+%{ endfor ~}
+
+# Logging
+log-queries
+log-dhcp

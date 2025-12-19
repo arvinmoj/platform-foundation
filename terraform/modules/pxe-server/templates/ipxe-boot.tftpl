@@ -1,0 +1,18 @@
+#!ipxe
+# iPXE Boot Configuration for ${hostname}
+
+echo ================================================
+echo Booting ${hostname}
+echo ================================================
+
+# Load kernel
+kernel ${kernel_url} \
+  ip=dhcp \
+  autoinstall \
+  ds=nocloud-net;s=${autoinstall_url}
+
+# Load initrd
+initrd ${initrd_url}
+
+# Boot
+boot

@@ -1,0 +1,160 @@
+#!/usr/bin/env bash
+# PXE Server Setup Script
+
+set -euo pipefail
+
+# Configuration
+TFTP_DIR="${tftp_directory}"
+HTTP_DIR="${http_directory}"
+PXE_SERVER_IP="${pxe_server_ip}"
+UBUNTU_VERSION="${ubuntu_version}"
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
+
+log_info() {
+  echo -e "$${GREEN}[INFO]$${NC} $1"
+}
+
+log_warn() {
+  echo -e "$${YELLOW}[WARN]$${NC} $1"
+}
+
+log_error() {
+  echo -e "$${RED}[ERROR]$${NC} $1"
+}
+
+# Check if running as root
+check_root() {
+  if [ "$EUID" -ne 0 ]; then
+    log_error "This script must be run as root"
+    exit 1
+  fi
+}
+
+# Install required packages
+install_packages() {
+  log_info "Installing required packages..."
+  
+  apt-get update
+  apt-get install -y \
+    tftpd-hpa \
+    nginx \
+    wget \
+    curl \
+    ipxe
+  
+  log_info "Packages installed successfully"
+}
+
+# Setup TFTP server
+setup_tftp() {
+  log_info "Setting up TFTP server..."
+  
+  # Create TFTP directory
+  mkdir -p "$TFTP_DIR"
+  
+  # Configure TFTP server
+  cat > /etc/default/tftpd-hpa <<EOF
+TFTP_USERNAME="tftp"
+TFTP_DIRECTORY="$TFTP_DIR"
+TFTP_ADDRESS=":69"
+TFTP_OPTIONS="--secure"
+EOF
+  
+  # Copy iPXE bootloaders
+  cp /usr/lib/ipxe/ipxe.efi "$TFTP_DIR/"
+  cp /usr/lib/ipxe/undionly.kpxe "$TFTP_DIR/"
+  
+  # Restart TFTP service
+  systemctl restart tftpd-hpa
+  systemctl enable tftpd-hpa
+  
+  log_info "TFTP server configured"
+}
+
+# Setup HTTP server
+setup_http() {
+  log_info "Setting up HTTP server..."
+  
+  # Create HTTP directories
+  mkdir -p "$HTTP_DIR/autoinstall"
+  mkdir -p "$HTTP_DIR/ubuntu/$UBUNTU_VERSION"
+  
+  # Configure nginx
+  cat > /etc/nginx/sites-available/pxe <<EOF
+server {
+    listen 80;
+    server_name $PXE_SERVER_IP;
+    
+    root $HTTP_DIR;
+    
+    location / {
+        autoindex on;
+    }
+    
+    location /autoinstall/ {
+        add_header Content-Type text/plain;
+    }
+}
+EOF
+  
+  # Enable site
+  ln -sf /etc/nginx/sites-available/pxe /etc/nginx/sites-enabled/pxe
+  rm -f /etc/nginx/sites-enabled/default
+  
+  # Restart nginx
+  systemctl restart nginx
+  systemctl enable nginx
+  
+  log_info "HTTP server configured"
+}
+
+# Download Ubuntu netboot files
+download_ubuntu() {
+  log_info "Downloading Ubuntu $UBUNTU_VERSION netboot files..."
+  
+  local ubuntu_base_url="http://archive.ubuntu.com/ubuntu/dists/jammy/main/installer-amd64/current/legacy-images/netboot/ubuntu-installer/amd64"
+  
+  # Download kernel and initrd
+  wget -q -O "$HTTP_DIR/ubuntu/$UBUNTU_VERSION/vmlinuz" "$ubuntu_base_url/linux"
+  wget -q -O "$HTTP_DIR/ubuntu/$UBUNTU_VERSION/initrd" "$ubuntu_base_url/initrd.gz"
+  
+  log_info "Ubuntu files downloaded"
+}
+
+# Configure firewall
+configure_firewall() {
+  log_info "Configuring firewall..."
+  
+  if command -v ufw &> /dev/null; then
+    ufw allow 69/udp   # TFTP
+    ufw allow 80/tcp   # HTTP
+    ufw allow 67/udp   # DHCP (if using)
+    ufw allow 68/udp   # DHCP (if using)
+  fi
+  
+  log_info "Firewall configured"
+}
+
+# Main execution
+main() {
+  log_info "Starting PXE server setup..."
+  
+  check_root
+  install_packages
+  setup_tftp
+  setup_http
+  download_ubuntu
+  configure_firewall
+  
+  log_info "PXE server setup complete!"
+  log_info "TFTP directory: $TFTP_DIR"
+  log_info "HTTP directory: $HTTP_DIR"
+  log_info "Server IP: $PXE_SERVER_IP"
+}
+
+main "$@"
