@@ -1,0 +1,76 @@
+# Terraform
+**/.terraform/
+**/.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+
+# Sensitive information
+secrets/
+credentials/
+**/*credentials*
+**/*password*
+**/*secret*
+**/*key*.pem
+**/*key*.key
+*.crt
+*.csr
+
+# OS files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# IDE
+.vscode/
+.idea/
+*.iml
+*.code-workspace
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+build/
+dist/
+*.egg-info/
+
+# Ansible
+*.retry
+.vault_pass
+
+# Logs
+*.log
+logs/
+
+# PXE/Images
+pxe/images/*.iso
+pxe/kernels/*.kernel
+pxe/initrds/*.img
+images/ubuntu/*.iso
+
+# Inventory databases
+inventory.db
+*.sqlite
+*.sqlite3
+
+# Temporary files
+tmp/
+temp/
+*.tmp
