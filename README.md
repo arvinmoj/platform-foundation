@@ -172,29 +172,6 @@ module "baremetal_cluster" {
 }
 ```
 
-## Roadmap
-
-### Phase 1: MVP (Weeks 1-4)
-- [x] Hardware discovery module
-- [ ] Basic PXE provisioning
-- [ ] Single-node Kubernetes
-- [ ] Local storage
-- [ ] Basic networking
-
-### Phase 2: Production Ready (Weeks 5-8)
-- [ ] HA control plane
-- [ ] RAID/LVM automation
-- [ ] MetalLB integration
-- [ ] Rook/Ceph storage
-- [ ] Hardware monitoring
-
-### Phase 3: Advanced Features (Weeks 9-12)
-- [ ] GPU support
-- [ ] BGP networking
-- [ ] Firmware automation
-- [ ] Predictive failure analysis
-- [ ] Self-healing capabilities
-
 ## Documentation
 
 - [Hardware Requirements](docs/hardware-requirements.md)
