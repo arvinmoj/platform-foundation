@@ -1,0 +1,419 @@
+#!/usr/bin/env bash
+# metalctl - Bare-Metal Kubernetes Platform Control Tool
+# Main CLI interface for managing bare-metal infrastructure
+
+set -euo pipefail
+
+VERSION="0.1.0"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+# Logging functions
+log_info() {
+  echo -e "${GREEN}[INFO]${NC} $1"
+}
+
+log_warn() {
+  echo -e "${YELLOW}[WARN]${NC} $1"
+}
+
+log_error() {
+  echo -e "${RED}[ERROR]${NC} $1"
+}
+
+log_debug() {
+  if [ "${DEBUG:-0}" = "1" ]; then
+    echo -e "${BLUE}[DEBUG]${NC} $1"
+  fi
+}
+
+# Show usage
+show_usage() {
+  cat <<EOF
+metalctl - Bare-Metal Kubernetes Platform Control Tool v${VERSION}
+
+USAGE:
+  metalctl <command> [options]
+
+COMMANDS:
+  discover      Discover hardware on the network
+  inventory     Show hardware inventory
+  provision     Provision nodes with OS and Kubernetes
+  power         Control server power state
+  console       Access server serial console
+  firmware      Manage server firmware
+  storage       Initialize storage on nodes
+  health        Check cluster health
+  version       Show version information
+  help          Show this help message
+
+OPTIONS:
+  -h, --help    Show help for command
+  -v, --verbose Enable verbose output
+  --debug       Enable debug output
+
+EXAMPLES:
+  # Discover hardware
+  metalctl discover --network 192.168.1.0/24
+
+  # View inventory
+  metalctl inventory --format json
+
+  # Provision nodes
+  metalctl provision --config cluster.yaml --nodes k8s-master-[01:03]
+
+  # Power management
+  metalctl power --state on --nodes k8s-worker-01,k8s-worker-02
+
+  # Access console
+  metalctl console --node k8s-master-01
+
+  # Update firmware
+  metalctl firmware --update --node all
+
+  # Initialize storage
+  metalctl storage --initialize --node k8s-worker-01 --disks /dev/sdb,/dev/sdc
+
+For more information, visit: https://github.com/your-org/platform-foundation
+EOF
+}
+
+# Discover command
+cmd_discover() {
+  log_info "Hardware discovery"
+  
+  local network=""
+  local output="table"
+  
+  while [[ $# -gt 0 ]]; do
+    case $1 in
+      --network)
+        network="$2"
+        shift 2
+        ;;
+      --output)
+        output="$2"
+        shift 2
+        ;;
+      *)
+        log_error "Unknown option: $1"
+        return 1
+        ;;
+    esac
+  done
+  
+  if [ -z "$network" ]; then
+    log_error "Network range required: --network 192.168.1.0/24"
+    return 1
+  fi
+  
+  log_info "Scanning network: $network"
+  
+  # Call discovery scripts
+  if [ -f "$PROJECT_ROOT/scripts/discovery/ipmi-discovery-production-cluster.sh" ]; then
+    bash "$PROJECT_ROOT/scripts/discovery/ipmi-discovery-production-cluster.sh"
+  else
+    log_warn "Discovery script not found. Run 'terraform apply -target=module.discovery' first"
+  fi
+}
+
+# Inventory command
+cmd_inventory() {
+  log_info "Hardware inventory"
+  
+  local format="table"
+  local cluster="production-cluster"
+  
+  while [[ $# -gt 0 ]]; do
+    case $1 in
+      --format)
+        format="$2"
+        shift 2
+        ;;
+      --cluster)
+        cluster="$2"
+        shift 2
+        ;;
+      *)
+        log_error "Unknown option: $1"
+        return 1
+        ;;
+    esac
+  done
+  
+  local inventory_file="$PROJECT_ROOT/terraform/inventories/${cluster}-inventory.json"
+  
+  if [ ! -f "$inventory_file" ]; then
+    log_error "Inventory file not found: $inventory_file"
+    log_info "Run 'terraform apply' to generate inventory"
+    return 1
+  fi
+  
+  case $format in
+    json)
+      cat "$inventory_file"
+      ;;
+    table)
+      log_info "Cluster: $cluster"
+      echo ""
+      jq -r '.servers | to_entries[] | "\(.key)\t\(.value.ip_address)\t\(.value.role)\t\(.value.cpu_cores) cores\t\(.value.memory_gb)GB RAM"' "$inventory_file" | column -t
+      ;;
+    csv)
+      jq -r '.servers | to_entries[] | [.key, .value.ip_address, .value.mac_address, .value.role, .value.cpu_cores, .value.memory_gb] | @csv' "$inventory_file"
+      ;;
+    *)
+      log_error "Unknown format: $format"
+      return 1
+      ;;
+  esac
+}
+
+# Provision command
+cmd_provision() {
+  log_info "Node provisioning"
+  
+  local config=""
+  local nodes=""
+  
+  while [[ $# -gt 0 ]]; do
+    case $1 in
+      --config)
+        config="$2"
+        shift 2
+        ;;
+      --nodes)
+        nodes="$2"
+        shift 2
+        ;;
+      *)
+        log_error "Unknown option: $1"
+        return 1
+        ;;
+    esac
+  done
+  
+  if [ -z "$config" ]; then
+    log_error "Config file required: --config cluster.yaml"
+    return 1
+  fi
+  
+  log_info "Provisioning nodes: $nodes"
+  log_info "Using config: $config"
+  
+  # Run terraform apply
+  cd "$PROJECT_ROOT/terraform/inventories/production"
+  terraform apply -auto-approve
+}
+
+# Power command
+cmd_power() {
+  log_info "Power management"
+  
+  local state=""
+  local nodes=""
+  
+  while [[ $# -gt 0 ]]; do
+    case $1 in
+      --state)
+        state="$2"
+        shift 2
+        ;;
+      --nodes)
+        nodes="$2"
+        shift 2
+        ;;
+      *)
+        log_error "Unknown option: $1"
+        return 1
+        ;;
+    esac
+  done
+  
+  if [ -z "$state" ] || [ -z "$nodes" ]; then
+    log_error "State and nodes required"
+    log_info "Usage: metalctl power --state on|off|reset --nodes node1,node2"
+    return 1
+  fi
+  
+  log_info "Setting power state: $state for nodes: $nodes"
+  log_warn "Power management not yet implemented"
+}
+
+# Console command
+cmd_console() {
+  log_info "Serial console access"
+  
+  local node=""
+  
+  while [[ $# -gt 0 ]]; do
+    case $1 in
+      --node)
+        node="$2"
+        shift 2
+        ;;
+      *)
+        log_error "Unknown option: $1"
+        return 1
+        ;;
+    esac
+  done
+  
+  if [ -z "$node" ]; then
+    log_error "Node required: --node k8s-master-01"
+    return 1
+  fi
+  
+  log_info "Connecting to console: $node"
+  log_warn "Console access not yet implemented"
+}
+
+# Firmware command
+cmd_firmware() {
+  log_info "Firmware management"
+  
+  local action=""
+  local node=""
+  
+  while [[ $# -gt 0 ]]; do
+    case $1 in
+      --update)
+        action="update"
+        shift
+        ;;
+      --check)
+        action="check"
+        shift
+        ;;
+      --node)
+        node="$2"
+        shift 2
+        ;;
+      *)
+        log_error "Unknown option: $1"
+        return 1
+        ;;
+    esac
+  done
+  
+  log_info "Firmware $action for node: $node"
+  log_warn "Firmware management not yet implemented"
+}
+
+# Storage command
+cmd_storage() {
+  log_info "Storage management"
+  
+  local action=""
+  local node=""
+  local disks=""
+  
+  while [[ $# -gt 0 ]]; do
+    case $1 in
+      --initialize)
+        action="initialize"
+        shift
+        ;;
+      --node)
+        node="$2"
+        shift 2
+        ;;
+      --disks)
+        disks="$2"
+        shift 2
+        ;;
+      *)
+        log_error "Unknown option: $1"
+        return 1
+        ;;
+    esac
+  done
+  
+  log_info "Storage initialization for node: $node, disks: $disks"
+  log_warn "Storage management not yet implemented"
+}
+
+# Health command
+cmd_health() {
+  log_info "Cluster health check"
+  
+  log_info "Checking hardware health..."
+  
+  if [ -f "$PROJECT_ROOT/scripts/healthchecks/health-check-production-cluster.sh" ]; then
+    bash "$PROJECT_ROOT/scripts/healthchecks/health-check-production-cluster.sh"
+  else
+    log_warn "Health check script not found"
+  fi
+  
+  log_info "Checking Kubernetes health..."
+  if command -v kubectl &> /dev/null; then
+    kubectl get nodes
+    kubectl get pods --all-namespaces
+  else
+    log_warn "kubectl not found or cluster not ready"
+  fi
+}
+
+# Version command
+cmd_version() {
+  echo "metalctl version ${VERSION}"
+  echo "Terraform: $(terraform version -json 2>/dev/null | jq -r '.terraform_version' || echo 'not found')"
+  echo "Kubectl: $(kubectl version --client --short 2>/dev/null || echo 'not found')"
+}
+
+# Main command dispatcher
+main() {
+  if [ $# -eq 0 ]; then
+    show_usage
+    exit 0
+  fi
+  
+  local command=$1
+  shift
+  
+  case $command in
+    discover)
+      cmd_discover "$@"
+      ;;
+    inventory)
+      cmd_inventory "$@"
+      ;;
+    provision)
+      cmd_provision "$@"
+      ;;
+    power)
+      cmd_power "$@"
+      ;;
+    console)
+      cmd_console "$@"
+      ;;
+    firmware)
+      cmd_firmware "$@"
+      ;;
+    storage)
+      cmd_storage "$@"
+      ;;
+    health)
+      cmd_health "$@"
+      ;;
+    version)
+      cmd_version
+      ;;
+    help|--help|-h)
+      show_usage
+      ;;
+    *)
+      log_error "Unknown command: $command"
+      show_usage
+      exit 1
+      ;;
+  esac
+}
+
+main "$@"
